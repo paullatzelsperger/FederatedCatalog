@@ -3,9 +3,9 @@ format.version = "1.1"
 
 [versions]
 awaitility = "4.2.0"
-edc = "0.4.1-SNAPSHOT"
+edc = "0.4.2-SNAPSHOT"
 failsafe = "3.3.2"
-restAssured = "5.3.2"
+restAssured = "5.4.0"
 
 [libraries]
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
@@ -24,6 +24,7 @@ edc-core-transform = { module = "org.eclipse.edc:transform-core", version.ref = 
 edc-dpf-selector-client = { module = "org.eclipse.edc:data-plane-selector-client", version.ref = "edc" }
 edc-dpf-selector-core = { module = "org.eclipse.edc:data-plane-selector-core", version.ref = "edc" }
 edc-dpf-selector-spi = { module = "org.eclipse.edc:data-plane-selector-spi", version.ref = "edc" }
+edc-dpf-transfer = { module = "org.eclipse.edc:transfer-data-plane", version.ref = "edc" }
 edc-ext-http = { module = "org.eclipse.edc:http", version.ref = "edc" }
 edc-iam-mock = { module = "org.eclipse.edc:iam-mock", version.ref = "edc" }
 edc-ids = { module = "org.eclipse.edc:ids", version.ref = "edc" }
@@ -43,7 +44,7 @@ edc-dsp-all = { module = "org.eclipse.edc:dsp", version.ref = "edc" }
 
 [bundles]
 edc-connector = ["edc-boot", "edc-core-connector", "edc-core-jersey", "edc-api-observability"]
-edc-dpf = ["edc-dpf-selector-client", "edc-dpf-selector-spi", "edc-dpf-selector-core"]
+edc-dpf = ["edc-dpf-selector-spi", "edc-dpf-selector-core"]
 
 [plugins]
 shadow = { id = "com.github.johnrengelman.shadow", version = "8.1.1" }

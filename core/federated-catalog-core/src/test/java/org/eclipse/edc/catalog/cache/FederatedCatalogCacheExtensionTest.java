@@ -14,13 +14,15 @@
 
 package org.eclipse.edc.catalog.cache;
 
-import org.eclipse.edc.catalog.cache.query.DspNodeQueryAdapter;
+import org.eclipse.edc.catalog.cache.query.DspCatalogRequestAction;
 import org.eclipse.edc.catalog.spi.CatalogConstants;
-import org.eclipse.edc.catalog.spi.FederatedCacheNodeDirectory;
-import org.eclipse.edc.catalog.spi.FederatedCacheNodeFilter;
 import org.eclipse.edc.catalog.spi.FederatedCacheStore;
-import org.eclipse.edc.catalog.spi.NodeQueryAdapter;
-import org.eclipse.edc.catalog.spi.model.UpdateResponse;
+import org.eclipse.edc.catalog.spi.model.CatalogUpdateResponse;
+import org.eclipse.edc.crawler.spi.CrawlerAction;
+import org.eclipse.edc.crawler.spi.TargetNodeDirectory;
+import org.eclipse.edc.crawler.spi.TargetNodeFilter;
+import org.eclipse.edc.crawler.spi.model.ExecutionPlan;
+import org.eclipse.edc.crawler.spi.model.RecurringExecutionPlan;
 import org.eclipse.edc.junit.extensions.DependencyInjectionExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.system.health.HealthCheckService;
@@ -31,35 +33,31 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.eclipse.edc.catalog.test.TestUtil.TEST_PROTOCOL;
 import static org.eclipse.edc.catalog.test.TestUtil.createCatalog;
 import static org.eclipse.edc.catalog.test.TestUtil.createNode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(DependencyInjectionExtension.class)
 class FederatedCatalogCacheExtensionTest {
-    private final FederatedCacheStore storeMock = mock(FederatedCacheStore.class);
-    private final FederatedCacheNodeDirectory nodeDirectoryMock = mock(FederatedCacheNodeDirectory.class);
+    private final FederatedCacheStore storeMock = mock();
+    private final TargetNodeDirectory nodeDirectoryMock = mock();
     private FederatedCatalogCacheExtension extension;
-    private ServiceExtensionContext context;
 
     @BeforeEach
     void setUp(ServiceExtensionContext context, ObjectFactory factory) {
-        this.context = spy(context);
-        this.context.registerService(FederatedCacheNodeDirectory.class, nodeDirectoryMock);
-        this.context.registerService(FederatedCacheStore.class, storeMock);
-        this.context.registerService(FederatedCacheNodeFilter.class, null);
+        context.registerService(TargetNodeDirectory.class, nodeDirectoryMock);
+        context.registerService(FederatedCacheStore.class, storeMock);
+        context.registerService(TargetNodeFilter.class, null);
+        context.registerService(ExecutionPlan.class, new RecurringExecutionPlan(Duration.ofSeconds(1), Duration.ofSeconds(0), mock()));
         extension = factory.constructInstance(FederatedCatalogCacheExtension.class);
     }
 
@@ -69,7 +67,7 @@ class FederatedCatalogCacheExtensionTest {
     }
 
     @Test
-    void initialize() {
+    void initialize(ServiceExtensionContext context) {
         extension.initialize(context);
 
         verify(context, atLeastOnce()).getMonitor();
@@ -77,7 +75,7 @@ class FederatedCatalogCacheExtensionTest {
     }
 
     @Test
-    void initialize_withHealthCheck(ObjectFactory factory) {
+    void initialize_withHealthCheck(ServiceExtensionContext context, ObjectFactory factory) {
         var healthCheckServiceMock = mock(HealthCheckService.class);
         context.registerService(HealthCheckService.class, healthCheckServiceMock);
         extension = factory.constructInstance(FederatedCatalogCacheExtension.class); //reconstruct to honor health service
@@ -88,21 +86,17 @@ class FederatedCatalogCacheExtensionTest {
     }
 
     @Test
-    void verify_successHandler_persistIsCalled() {
-        when(context.getSetting(eq("edc.catalog.cache.partition.num.crawlers"), anyString())).thenReturn("1");
-        when(context.getSetting(eq("edc.catalog.cache.execution.delay.seconds"), any())).thenReturn("0");
+    void verify_successHandler_persistIsCalled(ServiceExtensionContext context) {
         when(nodeDirectoryMock.getAll()).thenReturn(List.of(createNode()));
         extension.initialize(context);
-        var queryAdapter = mock(NodeQueryAdapter.class);
-        when(queryAdapter.sendRequest(any())).thenReturn(CompletableFuture.completedFuture(new UpdateResponse("test-url", createCatalog("test-catalog"))));
-        extension.createNodeQueryAdapterRegistry(context).register(TEST_PROTOCOL, queryAdapter);
+        var crawlerAction = mock(CrawlerAction.class);
+        when(crawlerAction.apply(any())).thenReturn(completedFuture(new CatalogUpdateResponse("test-url", createCatalog("test-catalog"))));
+        extension.createNodeQueryAdapterRegistry(context).register(TEST_PROTOCOL, crawlerAction);
 
         extension.start();
 
         await().atMost(Duration.ofSeconds(5))
-                .untilAsserted(() -> {
-                    verify(storeMock, atLeastOnce()).save(any());
-                });
+                .untilAsserted(() -> verify(storeMock, atLeastOnce()).save(any()));
     }
 
     @Test
@@ -111,11 +105,11 @@ class FederatedCatalogCacheExtensionTest {
     }
 
     @Test
-    void verifyProvider_cacheNodeAdapterRegistry() {
+    void verifyProvider_cacheNodeAdapterRegistry(ServiceExtensionContext context) {
         var n = extension.createNodeQueryAdapterRegistry(context);
         assertThat(extension.createNodeQueryAdapterRegistry(context)).isSameAs(n);
         assertThat(n.findForProtocol(CatalogConstants.DATASPACE_PROTOCOL)).hasSize(1)
-                .allSatisfy(qa -> assertThat(qa).isInstanceOf(DspNodeQueryAdapter.class));
+                .allSatisfy(qa -> assertThat(qa).isInstanceOf(DspCatalogRequestAction.class));
     }
 
 }
