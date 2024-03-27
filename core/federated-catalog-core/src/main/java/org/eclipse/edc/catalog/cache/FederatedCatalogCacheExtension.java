@@ -14,12 +14,25 @@
 
 package org.eclipse.edc.catalog.cache;
 
+import jakarta.json.Json;
 import org.eclipse.edc.catalog.cache.crawler.CrawlerActionRegistryImpl;
 import org.eclipse.edc.catalog.cache.query.DspCatalogRequestAction;
 import org.eclipse.edc.catalog.spi.Catalog;
 import org.eclipse.edc.catalog.spi.CatalogConstants;
 import org.eclipse.edc.catalog.spi.FederatedCacheStore;
 import org.eclipse.edc.catalog.spi.model.CatalogUpdateResponse;
+import org.eclipse.edc.catalog.transform.JsonObjectToCatalogTransformer;
+import org.eclipse.edc.catalog.transform.JsonObjectToDataServiceTransformer;
+import org.eclipse.edc.catalog.transform.JsonObjectToDatasetTransformer;
+import org.eclipse.edc.catalog.transform.JsonObjectToDistributionTransformer;
+import org.eclipse.edc.connector.core.base.agent.NoOpParticipantIdMapper;
+import org.eclipse.edc.core.transform.transformer.dcat.from.JsonObjectFromCatalogTransformer;
+import org.eclipse.edc.core.transform.transformer.dcat.from.JsonObjectFromDataServiceTransformer;
+import org.eclipse.edc.core.transform.transformer.dcat.from.JsonObjectFromDatasetTransformer;
+import org.eclipse.edc.core.transform.transformer.dcat.from.JsonObjectFromDistributionTransformer;
+import org.eclipse.edc.core.transform.transformer.edc.to.JsonValueToGenericTypeTransformer;
+import org.eclipse.edc.core.transform.transformer.odrl.from.JsonObjectFromPolicyTransformer;
+import org.eclipse.edc.core.transform.transformer.odrl.to.JsonObjectToPolicyTransformer;
 import org.eclipse.edc.crawler.spi.CrawlerActionRegistry;
 import org.eclipse.edc.crawler.spi.TargetNodeDirectory;
 import org.eclipse.edc.crawler.spi.TargetNodeFilter;
@@ -38,9 +51,11 @@ import org.eclipse.edc.spi.system.health.HealthCheckService;
 import org.eclipse.edc.spi.types.TypeManager;
 import org.eclipse.edc.transform.spi.TypeTransformerRegistry;
 
+import java.util.Map;
+
 import static java.util.Optional.ofNullable;
+import static org.eclipse.edc.catalog.cache.FederatedCatalogDefaultServicesExtension.NUM_CRAWLER_SETTING;
 import static org.eclipse.edc.catalog.spi.CacheSettings.DEFAULT_NUMBER_OF_CRAWLERS;
-import static org.eclipse.edc.catalog.spi.CacheSettings.NUM_CRAWLER_SETTING;
 import static org.eclipse.edc.catalog.spi.CatalogConstants.DATASPACE_PROTOCOL;
 import static org.eclipse.edc.spi.CoreConstants.JSON_LD;
 
@@ -76,6 +91,8 @@ public class FederatedCatalogCacheExtension implements ServiceExtension {
 
     @Inject
     private Monitor monitor;
+    @Inject
+    private TypeTransformerRegistry transformerRegistry;
 
     @Override
     public String name() {
@@ -106,6 +123,8 @@ public class FederatedCatalogCacheExtension implements ServiceExtension {
                 .nodeDirectory(directory)
                 .nodeFilterFunction(nodeFilter)
                 .build();
+
+        registerTransformers(context);
     }
 
     @Override
@@ -119,9 +138,28 @@ public class FederatedCatalogCacheExtension implements ServiceExtension {
             nodeQueryAdapterRegistry = new CrawlerActionRegistryImpl();
             // catalog queries via IDS multipart and DSP are supported by default
             var mapper = typeManager.getMapper(JSON_LD);
-            nodeQueryAdapterRegistry.register(DATASPACE_PROTOCOL, new DspCatalogRequestAction(dispatcherRegistry, context.getMonitor(), mapper, registry, jsonLdService));
+            nodeQueryAdapterRegistry.register(DATASPACE_PROTOCOL, new DspCatalogRequestAction(dispatcherRegistry, context.getMonitor(), mapper, registry.forContext("dsp-api"), jsonLdService));
         }
         return nodeQueryAdapterRegistry;
+    }
+
+    private void registerTransformers(ServiceExtensionContext context) {
+        transformerRegistry.register(new JsonObjectToCatalogTransformer());
+        transformerRegistry.register(new JsonObjectToDatasetTransformer());
+        transformerRegistry.register(new JsonObjectToDataServiceTransformer());
+        transformerRegistry.register(new JsonObjectToDistributionTransformer());
+
+        var jsonFactory = Json.createBuilderFactory(Map.of());
+        var mapper = context.getService(TypeManager.class).getMapper(JSON_LD);
+        var participantIdMapper = new NoOpParticipantIdMapper();
+        transformerRegistry.register(new JsonObjectFromCatalogTransformer(jsonFactory, mapper, participantIdMapper));
+        transformerRegistry.register(new JsonObjectFromDatasetTransformer(jsonFactory, mapper));
+        transformerRegistry.register(new JsonObjectFromDistributionTransformer(jsonFactory));
+        transformerRegistry.register(new JsonObjectFromDataServiceTransformer(jsonFactory));
+
+        transformerRegistry.register(new JsonObjectFromPolicyTransformer(jsonFactory, participantIdMapper));
+        transformerRegistry.register(new JsonObjectToPolicyTransformer(participantIdMapper));
+        transformerRegistry.register(new JsonValueToGenericTypeTransformer(mapper));
     }
 
     /**

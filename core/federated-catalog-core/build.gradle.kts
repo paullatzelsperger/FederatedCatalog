@@ -20,17 +20,22 @@ plugins {
 dependencies {
     api(libs.edc.spi.core)
     api(libs.edc.spi.web)
+    api(libs.edc.spi.dsp)
     api(project(":core:crawler-core"))
     api(project(":spi:federated-catalog-spi"))
 
     implementation(libs.edc.util)
     implementation(libs.edc.core.connector)
+    implementation(libs.edc.query.lib)
+    implementation(libs.edc.core.transform)
+    implementation(libs.edc.dsp.api.configuration)
     implementation(libs.edc.spi.jsonld)
-    implementation(libs.edc.jsonld)
+    implementation(libs.edc.json.ld.lib)
 
     // required for integration test
-    testImplementation(libs.edc.junit)
+    testImplementation(libs.edc.dsp.transform.catalog)
     testImplementation(libs.edc.core.transform)
+    testImplementation(libs.edc.junit)
     testImplementation(libs.edc.ext.http)
     testImplementation(libs.awaitility)
 }
