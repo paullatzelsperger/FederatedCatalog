@@ -17,21 +17,24 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core:federated-catalog-core"))
-    implementation(project(":extensions:api:federated-catalog-api"))
-    runtimeOnly(libs.bundles.edc.connector)
-    runtimeOnly(libs.edc.core.transform)
-    runtimeOnly(libs.edc.core.controlplane)
-    runtimeOnly(libs.edc.core.dataPlane.selector)
-
-
+    testImplementation(project(":core:federated-catalog-core"))
+    testImplementation(project(":extensions:api:federated-catalog-api"))
+    
+    testImplementation(libs.edc.spi.jsonld)
+    testImplementation(libs.edc.spi.catalog)
+    testImplementation(libs.edc.dsp.all)
+    testImplementation(libs.edc.json.ld.lib)
+    testImplementation(libs.edc.core.jetty)
     testImplementation(libs.edc.junit)
+
     testImplementation(libs.restAssured)
     testImplementation(libs.awaitility)
 
-    testImplementation(libs.edc.spi.jsonld)
-    testImplementation(libs.edc.dsp.all)
-    testImplementation(libs.edc.json.ld.lib)
+
+    testRuntimeOnly(libs.bundles.edc.connector)
+    testRuntimeOnly(libs.edc.dsp.transform.catalog)
+    testRuntimeOnly(libs.edc.core.controlplane)
+    testRuntimeOnly(libs.edc.core.dataPlane.selector)
     testRuntimeOnly(libs.edc.iam.mock)
 }
 
